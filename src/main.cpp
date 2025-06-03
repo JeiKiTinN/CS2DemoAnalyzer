@@ -1,4 +1,4 @@
-// Dear ImGui: standalone example application for DirectX 11
+﻿// Dear ImGui: standalone example application for DirectX 11
 
 // Learn about Dear ImGui:
 // - FAQ                  https://dearimgui.com/faq
@@ -14,6 +14,7 @@
 #include "viewer.h"
 #include <filesystem>
 #include <iostream>
+#include "playback.h"
 
 // Data
 static ID3D11Device* g_pd3dDevice = nullptr;
@@ -22,8 +23,8 @@ static IDXGISwapChain* g_pSwapChain = nullptr;
 static bool                     g_SwapChainOccluded = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static ID3D11RenderTargetView* g_mainRenderTargetView = nullptr;
-static float zoom = 1.0f;
-static ImVec2 pan_offset = ImVec2(0, 0);
+static float g_zoom{ 1.0f };
+static ImVec2 pan_offset{ ImVec2(0, 0) };
 static ImVec2 last_mouse;
 
 
@@ -75,7 +76,8 @@ int main(int, char**)
 	ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
 	Viewer view;
-	view.LoadTextureFromOpenCV(RESOURCES_PATH "de_ancient_radar_700.jpg", g_pd3dDevice, &view.g_Texture, &view.g_TextureWidth, &view.g_TextureHeight);
+	view.LoadTextureFromOpenCV(RESOURCES_PATH "de_dust2_radar.jpg", g_pd3dDevice, &view.g_Texture, &view.g_TextureWidth, &view.g_TextureHeight);
+	Playback playback;
 
 	// Load Fonts
 	// - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
@@ -166,25 +168,25 @@ int main(int, char**)
 
 		{
 			ImGui::Begin("Radar", 0, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-			ImGui::Text("Map: de_ancient");
+			ImGui::SetWindowSize(ImVec2(1000, 800), 0);
+			ImGui::Text("Map: de_dust2");
 			ImVec2 child_size = ImVec2(700, 700);
 			ImGui::BeginChild("RadarViewport", child_size, true, ImGuiWindowFlags_NoScrollWithMouse);
-			
+
 			ImDrawList* draw_list = ImGui::GetWindowDrawList();
-			ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();                
+			ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
 			ImVec2 canvas_size = ImGui::GetContentRegionAvail();
 			ImVec2 canvas_center = ImVec2(canvas_p0.x + canvas_size.x * 0.5f, canvas_p0.y + canvas_size.y * 0.5f);
-			
-			
+
+
 			if (ImGui::IsWindowHovered()) {
 				float wheel = ImGui::GetIO().MouseWheel;
 				if (wheel != 0.0f) {
 					float zoom_delta = 0.1f * wheel;
-					zoom = std::clamp(zoom + zoom_delta, 1.f, 6.0f);
+					g_zoom = std::clamp(g_zoom + zoom_delta, 1.f, 6.0f);
 				}
 			}
 
-			
 			if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && ImGui::IsWindowHovered()) {
 				ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
 				pan_offset.x += mouse_delta.x;
@@ -192,7 +194,7 @@ int main(int, char**)
 			}
 
 			if (view.g_Texture) {
-				ImVec2 image_size = ImVec2(view.g_TextureWidth * zoom, view.g_TextureHeight * zoom);
+				ImVec2 image_size = ImVec2(view.g_TextureWidth * g_zoom, view.g_TextureHeight * g_zoom);
 				ImVec2 image_pos = ImVec2(canvas_center.x - image_size.x * 0.5f + pan_offset.x,
 					canvas_center.y - image_size.y * 0.5f + pan_offset.y);
 
@@ -200,9 +202,41 @@ int main(int, char**)
 					image_pos,
 					ImVec2(image_pos.x + image_size.x, image_pos.y + image_size.y));
 			}
-			
-			//ImGui::Image((ImTextureID)view.g_Texture, ImVec2((float)view.g_TextureWidth, (float)view.g_TextureHeight), ImVec2(0, 0), ImVec2(1, 1));
 			ImGui::EndChild();
+
+			ImGui::SameLine();
+
+			ImGui::BeginChild("PlayerList", ImVec2(200, 510), true, ImGuiWindowFlags_NoScrollWithMouse);
+			ImGui::Text("Player list:");
+			
+			char buffer[32];
+			if (ImGui::BeginListBox("PlayerArray", ImVec2(186, 500)))
+			{
+				for (int i = 0; i < 10; ++i) {
+					snprintf(buffer, sizeof(buffer), "Name %d", i);
+					ImGui::Selectable(buffer, true);
+				}
+				ImGui::EndListBox();
+			}
+			
+
+			ImGui::EndChild();
+
+
+			ImGui::SliderInt("Time", &playback.currentTime, 0.0f, playback.demoDuration);
+			ImGui::SameLine();
+			if (ImGui::Button("Play"))
+			{
+				playback.play();
+				std::cout << "Debug play" << std::endl;
+			}
+
+			ImGui::SameLine();
+
+			if (ImGui::Button("Pause"))
+			{
+				std::cout << "Debug pause" << std::endl;
+			}
 			ImGui::End();
 		}
 
@@ -218,8 +252,7 @@ int main(int, char**)
 
 		// Rendering
 		ImGui::Render();
-		const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
-		//const float clear_color_with_alpha[4] = { 0.f,0.f,0.f,0.f };
+		const float clear_color_with_alpha[4] = { 0.235f, 0.598f, 0.395f, 1.000f };
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
