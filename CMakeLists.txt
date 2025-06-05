@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.13)
 project(CS2DemoAnalyzer)
 set(CMAKE_CXX_STANDARD 17)
 
-set(OpenCV_DIR "D:/CS2Parser/CS2DemosAnalyzer/Opencv/opencv/build")
 find_package(OpenCV REQUIRED)
 
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
